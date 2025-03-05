@@ -15,98 +15,79 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       
-      - name: Instalar python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-          
-      - name: Atualizar README
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
+      - name: Atualizar README com issues
         run: |
-          cat > update_readme.py << 'EOF'
-          import json
-          import os
-          import re
-          import requests
-          from datetime import datetime
-
-          repo = os.environ.get('REPO')
-          token = os.environ.get('GITHUB_TOKEN')
-          readme_path = 'README.md'
-          start_marker = '<!-- VAGAS_START -->'
-          end_marker = '<!-- VAGAS_END -->'
-
-          # Função para formatar a data
-          def format_date(date_str):
-              date_obj = datetime.strptime(date_str.split('T')[0], '%Y-%m-%d')
-              return date_obj.strftime('%d/%m/%Y')
-
-          # Buscar issues abertas
-          headers = {'Authorization': f'token {token}'} if token else {}
-          url = f'https://api.github.com/repos/{repo}/issues?state=open&per_page=100'
+          # Configurar token para API
+          GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}"
+          REPO="${{ github.repository }}"
           
-          print(f"Buscando issues de: {url}")
-          response = requests.get(url, headers=headers)
+          # Buscar issues abertas (sem PRs)
+          issues=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/$REPO/issues?state=open&per_page=100" | \
+            jq '[.[] | select(has("pull_request") | not)]')
           
-          if response.status_code != 200:
-              print(f"Erro ao buscar issues: {response.status_code}")
-              print(response.text)
-              exit(1)
-              
-          # Filtrar apenas issues (não PRs)
-          issues = [issue for issue in response.json() if 'pull_request' not in issue]
-          print(f"Encontradas {len(issues)} issues abertas")
-
+          # Contar issues
+          issues_count=$(echo "$issues" | jq 'length')
+          echo "Encontradas $issues_count issues abertas"
+          
           # Criar conteúdo da seção de vagas
-          vagas_section = "## Vagas Disponíveis\n\n"
+          vagas_section="## Vagas Disponíveis\n\n"
           
-          if not issues:
-              vagas_section += "No momento não há vagas disponíveis. Fique atento para novas oportunidades!\n"
-          else:
-              vagas_section += "Lista de vagas disponíveis:\n\n"
+          if [ "$issues_count" -eq "0" ]; then
+            vagas_section="${vagas_section}No momento não há vagas disponíveis. Fique atento para novas oportunidades!\n"
+          else
+            vagas_section="${vagas_section}Lista de vagas disponíveis:\n\n"
+            
+            # Iterar sobre cada issue para formar a lista
+            echo "$issues" | jq -c '.[]' | while read -r issue; do
+              title=$(echo "$issue" | jq -r '.title')
+              url=$(echo "$issue" | jq -r '.html_url')
+              date=$(echo "$issue" | jq -r '.created_at' | cut -d'T' -f1 | awk -F- '{print $3"/"$2"/"$1}')
               
-              for issue in issues:
-                  title = issue['title']
-                  url = issue['html_url']
-                  date = format_date(issue['created_at'])
-                  vagas_section += f"- [{title}]({url}) - _Publicada em {date}_\n"
-              
-          vagas_section += "\n## Como publicar uma vaga\n\n"
-          vagas_section += f"Abra uma [nova issue](https://github.com/{repo}/issues/new) com o título da vaga e todas as informações necessárias no corpo da issue.\n"
-
-          # Ler conteúdo do README
-          if not os.path.exists(readme_path):
-              print("README não encontrado. Criando novo arquivo.")
-              with open(readme_path, 'w') as f:
-                  f.write(f"# Vagas DevOps\n\nRepositório para divulgação de vagas de DevOps.\n\n{start_marker}\n{vagas_section}\n{end_marker}\n")
-          else:
-              with open(readme_path, 'r', encoding='utf-8') as f:
-                  content = f.read()
-              
-              # Verificar se os marcadores existem
-              if start_marker in content and end_marker in content:
-                  # Substituir conteúdo entre marcadores
-                  pattern = f"{re.escape(start_marker)}.*?{re.escape(end_marker)}"
-                  new_content = re.sub(pattern, f"{start_marker}\n{vagas_section}\n{end_marker}", content, flags=re.DOTALL)
-              else:
-                  # Adicionar marcadores e conteúdo ao final
-                  new_content = f"{content}\n\n{start_marker}\n{vagas_section}\n{end_marker}\n"
-              
-              # Salvar README atualizado
-              with open(readme_path, 'w', encoding='utf-8') as f:
-                  f.write(new_content)
-                  
-          print("README atualizado com sucesso!")
-          EOF
+              vagas_section="${vagas_section}- [$title]($url) - _Publicada em $date_\n"
+            done
+          fi
           
-          # Executar o script
-          python update_readme.py
+          # Adicionar seção de como publicar vaga
+          vagas_section="${vagas_section}\n## Como publicar uma vaga\n\n"
+          vagas_section="${vagas_section}Abra uma [nova issue](https://github.com/$REPO/issues/new) com o título da vaga e todas as informações necessárias no corpo da issue.\n"
           
-          # Commit e push das alterações
-          git config user.name "GitHub Actions Bot"
-          git config user.email "actions@github.com"
-          git add README.md
-          git diff --quiet && git diff --staged --quiet || git commit -m "docs: atualiza lista de vagas no README [skip ci]"
-          git push
+          # Definir marcadores
+          README="README.md"
+          START_MARKER="<!-- VAGAS_START -->"
+          END_MARKER="<!-- VAGAS_END -->"
+          
+          # Substituir conteúdo entre marcadores (ou criar se não existirem)
+          if grep -q "$START_MARKER" "$README" && grep -q "$END_MARKER" "$README"; then
+            echo "Atualizando seção existente no README..."
+            
+            # Pegar o conteúdo antes do marcador inicial
+            start_content=$(sed -n "1,/$START_MARKER/p" "$README")
+            
+            # Pegar o conteúdo após o marcador final
+            end_content=$(sed -n "/$END_MARKER/,\$p" "$README")
+            
+            # Montar o novo conteúdo
+            echo "$start_content" > "$README.new"
+            echo -e "$vagas_section" >> "$README.new"
+            echo "$end_content" >> "$README.new"
+            
+            mv "$README.new" "$README"
+          else
+            echo "Marcadores não encontrados, adicionando seção ao final do README..."
+            
+            echo -e "\n$START_MARKER\n$vagas_section\n$END_MARKER" >> "$README"
+          fi
+          
+          # Commit e push
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$README"
+          
+          # Só faz commit se houver mudanças
+          if git diff --staged --quiet; then
+            echo "Nenhuma mudança no README"
+          else
+            git commit -m "docs: atualiza lista de vagas no README"
+            git push
+          fi
