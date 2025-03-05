@@ -1,0 +1,24 @@
+name: "Update README with Issues"
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+  issues:
+    types: [opened, closed, reopened]
+
+jobs:
+  update-readme-with-issues:
+    name: Update README with latest issues
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Update README with issues
+        uses: gautamkrishnar/blog-post-workflow@master
+        with:
+          comment_tag_name: "ISSUES"
+          feed_list: "https://github.com/${{ github.repository }}/issues.atom"
+          max_post_count: 10
+          template: "[$title]($url) $newline"
+          commit_message: "Update README com issues mais recentes"
+          gh_token: ${{ secrets.GITHUB_TOKEN }}

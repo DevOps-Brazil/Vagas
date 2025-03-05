@@ -30,22 +30,15 @@ Ao criar uma issue, você pode adicionar uma ou mais das seguintes labels:
 - `clt` - Para contratação CLT
 - `pj` - Para contratação PJ
 
-<!-- VAGAS_START -->
+
 ## Vagas Disponíveis
 
-Lista de vagas disponíveis:
-
-- [[HIBRIDO] DevOps - Itaim Bibi](https://github.com/DevOps-Brazil/Vagas/issues/442) - _Publicada em 
-- [[Remoto] Engenheiro de Confiabilidade do Site (SRE) na Coodesh](https://github.com/DevOps-Brazil/Vagas/issues/441) - _Publicada em 
-- [[REMOTO] Spec DevOps - Invillia](https://github.com/DevOps-Brazil/Vagas/issues/440) - _Publicada em 
-- [[Remoto] DevOps/Integração na Coodesh](https://github.com/DevOps-Brazil/Vagas/issues/439) - _Publicada em 
-- [[Remoto] Engenheiro de DevOps na Coodesh](https://github.com/DevOps-Brazil/Vagas/issues/438) - _Publicada em 
+<!-- ISSUES:START -->
+<!-- ISSUES:END -->
 
 ## Como publicar uma vaga
 
 Abra uma [nova issue](https://github.com/DevOps-Brazil/Vagas/issues/new) com o título da vaga e todas as informações necessárias no corpo da issue.
-
-<!-- VAGAS_END -->
 
 ## Contribuindo
 
