@@ -30,12 +30,6 @@ Ao criar uma issue, você pode adicionar uma ou mais das seguintes labels:
 - `clt` - Para contratação CLT
 - `pj` - Para contratação PJ
 
-
-## Vagas Disponíveis
-
-<!-- ISSUES:START -->
-<!-- ISSUES:END -->
-
 ## Como publicar uma vaga
 
 Abra uma [nova issue](https://github.com/DevOps-Brazil/Vagas/issues/new) com o título da vaga e todas as informações necessárias no corpo da issue.
