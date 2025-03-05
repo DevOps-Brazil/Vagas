@@ -31,6 +31,15 @@ Ao criar uma issue, você pode adicionar uma ou mais das seguintes labels:
 - `pj` - Para contratação PJ
 
 <!-- VAGAS_START -->
+## Vagas Disponíveis
+
+Lista de vagas disponíveis:
+
+
+## Como publicar uma vaga
+
+Abra uma [nova issue](https://github.com/DevOps-Brazil/Vagas/issues/new) com o título da vaga e todas as informações necessárias no corpo da issue.
+
 <!-- VAGAS_END -->
 
 ## Contribuindo
