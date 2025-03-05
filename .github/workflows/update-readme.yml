@@ -5,7 +5,7 @@ on:
     types: [opened, edited, deleted, closed, reopened, labeled, unlabeled]
   workflow_dispatch:
   schedule:
-    - cron: '0 */12 * * *'
+    - cron: '0 */12 * * *'  # Executa a cada 6 horas
 
 jobs:
   update-readme:
@@ -15,21 +15,89 @@ jobs:
       - name: Checkout do repositório
         uses: actions/checkout@v3
       
-      - name: Configurar Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
-      
-      - name: Instalar dependências
-        run: npm install @octokit/rest
-      
       - name: Atualizar README com issues
-        run: node .github/scripts/update-readme.js
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Commit e push das alterações
         run: |
+          # Configurar token para autenticação
+          export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+          
+          # Extrair nome do repositório
+          REPO="${GITHUB_REPOSITORY}"
+          OWNER_REPO=(${REPO//\// })
+          OWNER="${OWNER_REPO[0]}"
+          REPO_NAME="${OWNER_REPO[1]}"
+          
+          # Buscar issues abertas
+          echo "Buscando issues abertas em $OWNER/$REPO_NAME..."
+          ISSUES=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/$OWNER/$REPO_NAME/issues?state=open&per_page=100")
+          
+          # Criar seção de vagas
+          echo "Preparando a seção de vagas..."
+          VAGAS_SECTION="## Vagas Disponíveis\n\n"
+          
+          # Verificar se há issues
+          if [ "$(echo $ISSUES | jq '. | length')" -eq "0" ]; then
+            VAGAS_SECTION="${VAGAS_SECTION}No momento não há vagas disponíveis. Fique atento para novas oportunidades!\n"
+          else
+            VAGAS_SECTION="${VAGAS_SECTION}Lista de vagas disponíveis:\n\n"
+            
+            # Adicionar cada issue à seção
+            echo $ISSUES | jq -c '.[]' | while read -r issue; do
+              # Verificar se não é pull request
+              if [ "$(echo $issue | jq 'has("pull_request")')" == "false" ]; then
+                TITLE=$(echo $issue | jq -r '.title')
+                URL=$(echo $issue | jq -r '.html_url')
+                CREATED_AT=$(echo $issue | jq -r '.created_at' | cut -d'T' -f1)
+                
+                VAGAS_SECTION="${VAGAS_SECTION}- [$TITLE]($URL) - _Publicada em $CREATED_AT_\n"
+              fi
+            done
+            
+            # Adicionar instruções de como publicar
+            VAGAS_SECTION="${VAGAS_SECTION}\n## Como publicar uma vaga\n\n"
+            VAGAS_SECTION="${VAGAS_SECTION}Abra uma [nova issue](https://github.com/$OWNER/$REPO_NAME/issues/new) com o título da vaga e todas as informações necessárias no corpo da issue.\n"
+          fi
+          
+          # Atualizar o README
+          README_FILE="README.md"
+          
+          # Verificar se o README existe
+          if [ ! -f "$README_FILE" ]; then
+            echo "README não encontrado. Criando um novo..."
+            echo -e "# Vagas DevOps\n\nRepositório para divulgação de vagas de DevOps.\n" > $README_FILE
+          fi
+          
+          # Definir marcadores
+          START_MARKER="<!-- VAGAS_START -->"
+          END_MARKER="<!-- VAGAS_END -->"
+          
+          # Verificar se os marcadores existem no README
+          if grep -q "$START_MARKER" "$README_FILE" && grep -q "$END_MARKER" "$README_FILE"; then
+            # Substituir conteúdo entre os marcadores
+            echo "Atualizando a seção de vagas no README existente..."
+            awk -v start="$START_MARKER" -v end="$END_MARKER" -v section="$VAGAS_SECTION" '
+              {
+                if (found_start && !found_end) {
+                  if ($0 ~ end) {
+                    print $0
+                    found_end = 1
+                  }
+                } else {
+                  print $0
+                }
+                if ($0 ~ start) {
+                  print section
+                  found_start = 1
+                }
+              }
+            ' $README_FILE > README.tmp && mv README.tmp $README_FILE
+          else
+            # Adicionar marcadores e seção ao final do README
+            echo "Adicionando seção de vagas ao README..."
+            echo -e "\n$START_MARKER\n$VAGAS_SECTION\n$END_MARKER" >> $README_FILE
+          fi
+          
+          # Commit e push das alterações
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add README.md
