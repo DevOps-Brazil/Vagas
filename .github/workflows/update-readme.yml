@@ -40,10 +40,22 @@ jobs:
             TITLE=$(echo "$ISSUE" | jq -r '.title')
             URL=$(echo "$ISSUE" | jq -r '.html_url')
             DATE=$(echo "$ISSUE" | jq -r '.created_at' | cut -d'T' -f1)
-            # Formatar data (ano-mes-dia para dia/mes/ano)
-            DATE_BR=$(echo "$DATE" | awk -F- '{print $3"/"$2"/"$1}')
             
-            SECTION+="- [$TITLE]($URL) - _Publicada em $DATE_BR_\n"
+            # Formatar data (ano-mes-dia para dia/mes/ano)
+            if [ -n "$DATE" ]; then
+              # Usar formato mais simples e direto para evitar problemas com o awk
+              DIA=$(echo "$DATE" | cut -d'-' -f3)
+              MES=$(echo "$DATE" | cut -d'-' -f2)
+              ANO=$(echo "$DATE" | cut -d'-' -f1)
+              DATE_BR="${DIA}/${MES}/${ANO}"
+            else
+              DATE_BR="data não disponível"
+              echo "AVISO: Data não encontrada para issue $TITLE"
+            fi
+            
+            # Adicionar entrada à lista sem caracteres especiais na formatação
+            ITEM="- [$TITLE]($URL) - _Publicada em $DATE_BR_"
+            SECTION="$SECTION$ITEM\n"
           done
           
           # Adicionar informações sobre como publicar
