@@ -23,65 +23,62 @@ jobs:
           
           # Buscar issues abertas
           echo "Buscando issues abertas..."
-          issues=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            "https://api.github.com/repos/$REPO/issues?state=open&per_page=100" | \
-            jq '[.[] | select(has("pull_request") | not)]')
+          RESPONSE=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/$REPO/issues?state=open&per_page=100")
           
-          # Contar issues
-          issues_count=$(echo "$issues" | jq 'length')
-          echo "Encontradas $issues_count issues abertas"
+          # Filtrar PRs e contar
+          ISSUES=$(echo "$RESPONSE" | jq '[.[] | select(has("pull_request") | not)]')
+          COUNT=$(echo "$ISSUES" | jq 'length')
+          echo "Encontradas $COUNT issues abertas"
           
-          # Criar lista de vagas
-          vagas_lista=""
+          # Criar conteúdo atualizado
+          SECTION="## Vagas Disponíveis\n\n"
+          SECTION+="Lista de vagas disponíveis:\n\n"
           
-          if [ "$issues_count" -eq "0" ]; then
-            vagas_lista="No momento não há vagas disponíveis. Fique atento para novas oportunidades!"
+          # Processar cada issue
+          for i in $(seq 0 $(($COUNT - 1))); do
+            ISSUE=$(echo "$ISSUES" | jq ".[$i]")
+            TITLE=$(echo "$ISSUE" | jq -r '.title')
+            URL=$(echo "$ISSUE" | jq -r '.html_url')
+            DATE=$(echo "$ISSUE" | jq -r '.created_at' | cut -d'T' -f1)
+            # Formatar data (ano-mes-dia para dia/mes/ano)
+            DATE_BR=$(echo "$DATE" | awk -F- '{print $3"/"$2"/"$1}')
+            
+            SECTION+="- [$TITLE]($URL) - _Publicada em $DATE_BR_\n"
+          done
+          
+          # Adicionar informações sobre como publicar
+          SECTION+="\n## Como publicar uma vaga\n\n"
+          SECTION+="Abra uma [nova issue](https://github.com/$REPO/issues/new) com o título da vaga e todas as informações necessárias no corpo da issue.\n"
+          
+          # Salvar a seção em um arquivo
+          echo -e "$SECTION" > section.txt
+          
+          # Criar README temporário
+          START_LINE=$(grep -n "<!-- VAGAS_START -->" README.md | cut -d':' -f1)
+          END_LINE=$(grep -n "<!-- VAGAS_END -->" README.md | cut -d':' -f1)
+          
+          if [ -n "$START_LINE" ] && [ -n "$END_LINE" ]; then
+            # Extrair parte antes do marcador
+            head -n $START_LINE README.md > new_readme.md
+            
+            # Adicionar nova seção
+            cat section.txt >> new_readme.md
+            
+            # Extrair parte após o marcador
+            tail -n +$END_LINE README.md >> new_readme.md
+            
+            # Substituir README
+            mv new_readme.md README.md
           else
-            while read -r issue; do
-              title=$(echo "$issue" | jq -r '.title')
-              url=$(echo "$issue" | jq -r '.html_url')
-              date=$(echo "$issue" | jq -r '.created_at' | cut -d'T' -f1 | awk -F- '{print $3"/"$2"/"$1}')
-              
-              vagas_lista="${vagas_lista}- [$title]($url) - _Publicada em $date_\n"
-            done < <(echo "$issues" | jq -c '.[]')
+            # Marcadores não encontrados, adicionar ao final
+            echo -e "\n<!-- VAGAS_START -->" >> README.md
+            cat section.txt >> README.md
+            echo -e "<!-- VAGAS_END -->" >> README.md
           fi
           
-          # Criar arquivo temporário com a nova seção
-          cat > vagas_section.txt << EOF
-          ## Vagas Disponíveis
-
-          Lista de vagas disponíveis:
-
-          $(echo -e "$vagas_lista")
-
-          ## Como publicar uma vaga
-
-          Abra uma [nova issue](https://github.com/$REPO/issues/new) com o título da vaga e todas as informações necessárias no corpo da issue.
-          EOF
-          
-          # Verificar se o README existe
-          if [ ! -f "README.md" ]; then
-            echo "README não encontrado, criando um novo..."
-            cat > README.md << EOF
-          # Vagas DevOps
-
-          Repositório para divulgação de vagas de DevOps.
-          
-          <!-- VAGAS_START -->
-          <!-- VAGAS_END -->
-          EOF
-          fi
-          
-          # Usar uma abordagem de substituição direta com sed
-          sed -i -e '/<!-- VAGAS_START -->/,/<!-- VAGAS_END -->/c\<!-- VAGAS_START -->\n'"$(cat vagas_section.txt)"'\n<!-- VAGAS_END -->' README.md
-          
-          # Mostrar o arquivo modificado
-          echo "Conteúdo do README após modificação:"
-          cat README.md
-          
-          # Configurar git e fazer commit
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
+          # Commit e push
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
           git add README.md
-          git commit -m "docs: atualiza lista de vagas no README [skip ci]"
+          git commit -m "docs: atualiza lista de vagas no README"
           git push
